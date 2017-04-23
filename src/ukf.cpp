@@ -110,9 +110,10 @@ void UKF::ProcessMeasurement( MeasurementPackage meas_package )
 
 				double const px = rho * cos( phi );
 				double const py = rho * sin( phi );
+				double const v = rhodot;
 
 				x_.fill( 0 );
-				x_ << px, py, 0, 0, 0;
+				x_ << px, py, v, 0, 0;
 
 				is_initialized_ = true;
 			}
@@ -284,7 +285,7 @@ void UKF::Prediction( double delta_t )
 	x_.fill( 0 );
 	for ( int i = 0; i < 2 * n_aug_ + 1; ++i )
 	{
-		x_ += weights_( i ) * Xsig_pred_.col( i );
+		x_ += ( weights_( i ) * Xsig_pred_.col( i ) );
 	}
 
 	//DEBUG
