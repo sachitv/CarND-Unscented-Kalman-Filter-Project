@@ -75,6 +75,12 @@ public:
 	///* the current NIS for laser
 	double NIS_laser_;
 
+	// measurement matrix
+	Eigen::MatrixXd m_H;
+
+	// R Matrices
+	Eigen::MatrixXd R_Laser;
+
 	/**
 	 * Constructor
 	 */
