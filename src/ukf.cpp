@@ -15,10 +15,10 @@ using std::vector;
  */
 UKF::UKF()
 {
-	// if this is false, laser measurements will be ignored (except during init)
+	// if this is false, laser measurements will be ignored
 	use_laser_ = true;
 
-	// if this is false, radar measurements will be ignored (except during init)
+	// if this is false, radar measurements will be ignored
 	use_radar_ = true;
 
 	// initial state vector
@@ -103,11 +103,14 @@ void UKF::ProcessMeasurement( MeasurementPackage meas_package )
 	if ( !is_initialized_ )
 	{
 		//Let's initialize the covariance matrix
-		P_ << 1, 0, 0, 0, 0,
-				0, 1, 0, 0, 0,
-				0, 0, 1, 0, 0,
-				0, 0, 0, 1, 0,
-				0, 0, 0, 0, 1;
+		P_ << 	2, 0, 0, 0, 0,
+				0, 2, 0, 0, 0,
+				0, 0, 10, 0, 0,
+				0, 0, 0, M_PI, 0,
+				0, 0, 0, 0, M_PI;
+
+		//Initialize the state Vector
+		x_.fill( 0 );
 
 		if ( meas_package.sensor_type_ == MeasurementPackage::RADAR )
 		{
@@ -119,10 +122,8 @@ void UKF::ProcessMeasurement( MeasurementPackage meas_package )
 
 				double const px = rho * cos( phi );
 				double const py = rho * sin( phi );
-				double const v = rhodot;
 
-				x_.fill( 0 );
-				x_ << px, py, v, 0, 0;
+				x_ << px, py, 0, 0, 0;
 
 				is_initialized_ = true;
 			}
@@ -131,7 +132,6 @@ void UKF::ProcessMeasurement( MeasurementPackage meas_package )
 		{
 			if ( use_laser_ )
 			{
-				x_.fill( 0 );
 				x_( 0 ) = meas_package.raw_measurements_( 0 );
 				x_( 1 ) = meas_package.raw_measurements_( 1 );
 
@@ -336,9 +336,9 @@ void UKF::UpdateLidar( MeasurementPackage meas_package )
 	You'll also need to calculate the lidar NIS.
 	*/
 
-	VectorXd z = meas_package.raw_measurements_;
+	VectorXd const z = meas_package.raw_measurements_;
 
-	MatrixXd const y = z - m_H * x_;
+	VectorXd const y = z - m_H * x_;
 
 	MatrixXd const HT(m_H.transpose());
 
@@ -352,6 +352,9 @@ void UKF::UpdateLidar( MeasurementPackage meas_package )
 	MatrixXd const I(MatrixXd::Identity(x_size, x_size));
 
 	P_ = (I - K * m_H) * P_;
+
+	//Calculate NIS
+	NIS_laser_ = y.transpose() * S.inverse() * y;
 }
 
 /**
@@ -394,7 +397,7 @@ void UKF::UpdateRadar( MeasurementPackage meas_package )
 		Zsig( 1, i ) = atan2( p_y, p_x );                                 			//phi
 
 		//Avoid divide by zero
-		if ( Zsig( 0, i ) < 0.01f )
+		if ( Zsig( 0, i ) < 0.001f )
 		{
 			Zsig( 2, i ) = 0;                             							//r_dot
 		}
@@ -429,7 +432,7 @@ void UKF::UpdateRadar( MeasurementPackage meas_package )
 
 	//add measurement noise covariance matrix
 	MatrixXd R = MatrixXd( n_z, n_z );
-	R << std_radr_ * std_radr_, 0, 0,
+	R << 	std_radr_ * std_radr_, 0, 0,
 			0, std_radphi_ * std_radphi_, 0,
 			0, 0, std_radrd_ * std_radrd_;
 	S = S + R;
