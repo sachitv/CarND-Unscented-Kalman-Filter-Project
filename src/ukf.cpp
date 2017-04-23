@@ -135,9 +135,13 @@ void UKF::ProcessMeasurement( MeasurementPackage meas_package )
 	}
 	else
 	{
-		float const deltaTime = (meas_package.timestamp_ - time_us_) / 1000000.0;
+		double const deltaTime = (meas_package.timestamp_ - time_us_) / 1000000.0;
 		time_us_ = meas_package.timestamp_;
-		Prediction( deltaTime );
+
+		if(deltaTime > 0.f)
+		{
+			Prediction( deltaTime );
+		}
 
 		if ( meas_package.sensor_type_ == MeasurementPackage::RADAR )
 		{
