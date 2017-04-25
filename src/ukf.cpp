@@ -64,6 +64,7 @@ UKF::UKF()
 
 	// Sigma points
 	Xsig_pred_ = MatrixXd( 5, 2 * n_aug_ + 1 );
+	Xsig_pred_.fill(0.f);
 
 	//Sigma point spreading factor
 	lambda_ = 3 - n_aug_;
@@ -169,61 +170,28 @@ void UKF::ProcessMeasurement( MeasurementPackage meas_package )
 
 		if(deltaTime > 0.f)
 		{
-			if(m_LastDeltaTime > 0)
-			{
-				if(m_Measurement.size() > 0)
-				{
-					//Sort with Radar as preference
-					std::sort(m_Measurement.begin(), m_Measurement.end(), [](MeasurementPackage const&a, MeasurementPackage const& b){
-						return (b.sensor_type_ < a.sensor_type_);
-					});
-
-					// choose radar with preference
-					for(auto const& chosen : m_Measurement)
-					{
-						if ( chosen.sensor_type_ == MeasurementPackage::RADAR )
-						{
-							if ( use_radar_ )
-							{
-								UpdateRadar( chosen );
-							}
-						}
-						else
-						{
-							if ( use_laser_ )
-							{
-								UpdateLidar( chosen );
-							}
-						}
-					}
-
-					m_Measurement.clear();
-				}
-			}
-
-			//Take small delta t values to avoid the problem going out of hand
-			m_LastDeltaTime = deltaTime;
-
 			static const double TIME_INTERVALS = 0.1f;
-			while(deltaTime > TIME_INTERVALS)
+			while ( deltaTime > TIME_INTERVALS )
 			{
 				static const double TIME_DELTA = 0.05f;
-				Prediction(TIME_DELTA);
+				Prediction( TIME_DELTA );
 				deltaTime -= TIME_DELTA;
 			}
-			if(deltaTime > 0)
-			{
-				Prediction(deltaTime);
-			}
-
-			m_Measurement.emplace_back(meas_package);
 		}
-		else if(m_LastDeltaTime > 0)
+		Prediction( deltaTime );
+
+		if ( meas_package.sensor_type_ == MeasurementPackage::RADAR )
 		{
-			if ( 	( ( meas_package.sensor_type_ == MeasurementPackage::RADAR ) && use_radar_) ||
-					( ( meas_package.sensor_type_ == MeasurementPackage::LASER ) && use_laser_) )
+			if ( use_radar_ )
 			{
-				m_Measurement.emplace_back( meas_package );
+				UpdateRadar( meas_package );
+			}
+		}
+		else
+		{
+			if ( use_laser_ )
+			{
+				UpdateLidar( meas_package );
 			}
 		}
 	}
