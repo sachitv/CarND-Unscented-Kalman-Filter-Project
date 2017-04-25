@@ -81,6 +81,12 @@ public:
 	// R Matrices
 	Eigen::MatrixXd R_Laser;
 
+	//Vector of measurements at same time step
+	std::vector<MeasurementPackage> m_Measurement;
+
+	//last delta time
+	double m_LastDeltaTime;
+
 	/**
 	 * Constructor
 	 */
