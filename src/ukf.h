@@ -76,16 +76,11 @@ public:
 	double NIS_laser_;
 
 	// measurement matrix
-	Eigen::MatrixXd m_H;
+	Eigen::MatrixXd H_;
 
 	// R Matrices
-	Eigen::MatrixXd R_Laser;
-
-	//Vector of measurements at same time step
-	std::vector<MeasurementPackage> m_Measurement;
-
-	//last delta time
-	double m_LastDeltaTime;
+	Eigen::MatrixXd R_Laser_;
+	Eigen::MatrixXd R_Radar_;
 
 	/**
 	 * Constructor

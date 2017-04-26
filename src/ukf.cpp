@@ -1,14 +1,13 @@
 #include "ukf.h"
-#include "tools.h"
-#include "Eigen/Dense"
-#include "measurement_package.h"
 #include <iostream>
-#include <math.h>
 
 using namespace std;
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using std::vector;
+
+#define DEBUG
+#undef DEBUG
 
 /**
  * Initializes Unscented Kalman filter
@@ -69,22 +68,32 @@ UKF::UKF()
 	//Sigma point spreading factor
 	lambda_ = 3 - n_aug_;
 
+	//measurement covariance matrix - laser
+	R_Laser_ = MatrixXd(2, 2);
+	R_Laser_ <<    	std_laspx_ * std_laspx_, 0,
+					0, std_laspy_ * std_laspy_;
+
+	R_Radar_ = MatrixXd(3, 3);
+	R_Radar_ << std_radr_ * std_radr_, 0, 0,
+				0, std_radphi_ * std_radphi_, 0,
+				0, 0, std_radrd_ * std_radrd_;
+
+	H_ = MatrixXd(2, 5);
+	H_ << 1, 0, 0, 0, 0,
+			0, 1, 0, 0, 0;
+
+	is_initialized_ = false;
+
 	// weights_
 	weights_ = VectorXd( 2 * n_aug_ + 1 );
 
-	//measurement covariance matrix - laser
-	R_Laser = MatrixXd(2, 2);
-	R_Laser <<    	std_laspx_ * std_laspx_, 0,
-					0, std_laspy_ * std_laspy_;
+	//set weights_
+	weights_( 0 ) = lambda_ / (lambda_ + n_aug_);
 
-	m_H = MatrixXd(2, 5);
-	m_H << 1, 0, 0, 0, 0,
-			0, 1, 0, 0, 0;
-
-
-	m_LastDeltaTime = 0.f;
-
-	is_initialized_ = false;
+	for ( int i = 1; i < 2 * n_aug_ + 1; ++i )
+	{
+		weights_( i ) = 1 / (2 * (lambda_ + n_aug_));
+	}
 }
 
 UKF::~UKF() {}
@@ -107,7 +116,7 @@ void UKF::ProcessMeasurement( MeasurementPackage meas_package )
 		//Let's initialize the covariance matrix
 		P_ << 	1.f, 0, 0, 0, 0,
 				0, 1.f, 0, 0, 0,
-				0, 0, 5.f, 0, 0,
+				0, 0, 3.f, 0, 0,
 				0, 0, 0, M_PI/8.f, 0,
 				0, 0, 0, 0, M_PI/8.f;
 
@@ -299,19 +308,12 @@ void UKF::Prediction( double delta_t )
 		Xsig_pred_( 3, i ) = remainder( Xsig_pred_( 3, i ), 2.0 * M_PI );
 	}
 
-	//DEBUG
+#if defined(DEBUG)
 	std::cout << "Xsig_pred_" << std::endl;
 	std::cout << Xsig_pred_;
 	std::cout << std::endl << std::endl;
-	//END DEBUG
+#endif
 
-	//set weights_
-	weights_( 0 ) = lambda_ / (lambda_ + n_aug_);
-
-	for ( int i = 1; i < 2 * n_aug_ + 1; ++i )
-	{
-		weights_( i ) = 1 / (2 * (lambda_ + n_aug_));
-	}
 
 	//predict state mean
 	x_.fill( 0 );
@@ -321,10 +323,10 @@ void UKF::Prediction( double delta_t )
 	}
 	x_( 3 ) = remainder( x_(3), 2.0 * M_PI );
 
-	//DEBUG
+#if defined(DEBUG)
 	std::cout << "predicted state mean\n" << x_ << std::endl;
 	std::cout << std::endl << std::endl;
-	//END DEBUG
+#endif
 
 	P_.fill( 0 );
 	//predict state covariance matrix
@@ -339,10 +341,10 @@ void UKF::Prediction( double delta_t )
 		P_ = P_ + weights_( i ) * x_diff * x_diff.transpose();
 	}
 
-	//DEBUG
+#if defined(DEBUG)
 	std::cout << "predicted state covariance\n" << P_ << std::endl;
 	std::cout << std::endl << std::endl;
-	//END DEBUG
+#endif
 }
 
 /**
@@ -362,11 +364,11 @@ void UKF::UpdateLidar( MeasurementPackage meas_package )
 
 	VectorXd const z = meas_package.raw_measurements_;
 
-	VectorXd y = z - m_H * x_;
+	VectorXd y = z - H_ * x_;
 
-	MatrixXd const HT(m_H.transpose());
+	MatrixXd const HT(H_.transpose());
 
-	MatrixXd const S = m_H * P_ * HT + R_Laser;
+	MatrixXd const S = H_ * P_ * HT + R_Laser_;
 	MatrixXd const K = P_ * HT * S.inverse();
 
 	x_ = x_ + K * y;
@@ -377,7 +379,7 @@ void UKF::UpdateLidar( MeasurementPackage meas_package )
 	long const x_size = x_.size();
 	MatrixXd const I(MatrixXd::Identity(x_size, x_size));
 
-	P_ = (I - K * m_H) * P_;
+	P_ = (I - K * H_) * P_;
 
 	//Calculate NIS
 	NIS_laser_ = y.transpose() * S.inverse() * y;
@@ -457,11 +459,7 @@ void UKF::UpdateRadar( MeasurementPackage meas_package )
 	}
 
 	//add measurement noise covariance matrix
-	MatrixXd R = MatrixXd( n_z, n_z );
-	R << 	std_radr_ * std_radr_, 0, 0,
-			0, std_radphi_ * std_radphi_, 0,
-			0, 0, std_radrd_ * std_radrd_;
-	S = S + R;
+	S = S + R_Radar_;
 
 	//create matrix for cross correlation Tc
 	MatrixXd Tc = MatrixXd( n_x_, n_z );
@@ -484,10 +482,10 @@ void UKF::UpdateRadar( MeasurementPackage meas_package )
 		Tc = Tc + weights_( i ) * x_diff * z_diff.transpose();
 	}
 
-	//DEBUG OUTPUT
+#if defined(DEBUG)
 	std::cout<<"Cross Correlation Matrix : "<<std::endl;
 	std::cout<<Tc<<std::endl<<std::endl;
-	//DEBUG OUTPUT
+#endif
 
 	//calculate Kalman gain K;
 	MatrixXd const K = Tc * S.inverse();
@@ -508,18 +506,16 @@ void UKF::UpdateRadar( MeasurementPackage meas_package )
 	//Calculate NIS
 	NIS_radar_ = z_diff.transpose() * S.inverse() * z_diff;
 
-	//Debug
+#if defined(DEBUG)
 	std::cout << "X" << std::endl;
 	for ( int i = 0; i < 5; ++i )
 	{
 		std::cout << x_( i ) << std::endl;
 	}
 	std::cout << std::endl << std::endl;
-	// Debug
 
-	//Debug
 	std::cout << "P" << std::endl;
 	std::cout<<P_<<std::endl;
 	std::cout << std::endl << std::endl;
-	// Debug
+#endif
 }
